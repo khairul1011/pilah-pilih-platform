@@ -5,8 +5,8 @@
 -- ============================================================
 
 -- Buat & gunakan database
-CREATE DATABASE IF NOT EXISTS pilah_pilih;
-USE pilah_pilih;
+
+
 
 -- ============================================================
 -- Tabel: users
