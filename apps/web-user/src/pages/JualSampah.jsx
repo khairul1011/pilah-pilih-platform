@@ -111,7 +111,7 @@ function JualSampah() {
           setSubCategory(cats[0].name);
         } else {
           // Fallback if no prices from DB
-          setWastePrices({ "Besi": { price: 5000, trend: 200, desc: "Besi tua", icon: "🔧" } });
+          setWastePrices({ "Besi": { price: 1500, trend: 200, desc: "Besi tua", icon: "🔧" } });
           setCategories([{ name: "Besi", type: "Besi" }]);
         }
       } catch (err) {
