@@ -3,7 +3,7 @@ const run = async () => {
         // Register a temporary user
         const rand = Math.floor(Math.random() * 100000);
         const email = `testuser${rand}@example.com`;
-        const regRes = await fetch('https://pilahpilih-backend-abc-gfa9dgdtfmfjbsgp.southeastasia-01.azurewebsites.net/api/auth/register', {
+        const regRes = await fetch('https://backend-production-f1e1.up.railway.app/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: 'Test User', email, password: 'password123', phone: '08123456789' })
@@ -16,7 +16,7 @@ const run = async () => {
         }
         
         // Login
-        const loginRes = await fetch('https://pilahpilih-backend-abc-gfa9dgdtfmfjbsgp.southeastasia-01.azurewebsites.net/api/auth/login', {
+        const loginRes = await fetch('https://backend-production-f1e1.up.railway.app/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password: 'password123' })
@@ -26,7 +26,7 @@ const run = async () => {
         console.log("Logged in!");
 
         // Try to send a message
-        const response = await fetch('https://pilahpilih-backend-abc-gfa9dgdtfmfjbsgp.southeastasia-01.azurewebsites.net/api/messages', {
+        const response = await fetch('https://backend-production-f1e1.up.railway.app/api/messages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
             body: JSON.stringify({ pickup_id: null, receiver_id: 7, message: "hai dari test" })
