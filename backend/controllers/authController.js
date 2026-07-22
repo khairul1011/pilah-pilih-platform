@@ -52,7 +52,7 @@ exports.registerPetugas = (req, res) => {
     if (results.length > 0) return res.status(409).json({ success: false, message: "Email sudah terdaftar" });
 
     const hashedPassword = bcrypt.hashSync(password, 10);
-    const radius = service_radius || 5.00;
+    const radius = service_radius || 15.00;
 
     db.query(
       "INSERT INTO users (name, email, password, role, pengepul_id, must_change_password, service_radius) VALUES (?, ?, ?, 'petugas', ?, true, ?)",
