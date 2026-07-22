@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import BottomNav from "../components/BottomNav";
@@ -23,23 +23,65 @@ function MapUpdater({ center }) {
   return null;
 }
 
-function MapPicker({ position, setPosition, setAddressString }) {
+function MapPicker({ position, setPosition, setAddressString, setEstimateData, setError, setIsGettingAddress }) {
+  const abortControllerRef = useRef(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   useMapEvents({
     async click(e) {
       const lat = e.latlng.lat;
       const lng = e.latlng.lng;
       setPosition([lat, lng]);
       setAddressString("Mengambil detail lokasi...");
+      setEstimateData(null);
+      setError("");
+      setIsGettingAddress(true);
+
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      
+      const timeoutId = setTimeout(() => {
+        if (isMountedRef.current && abortControllerRef.current === controller) {
+           controller.abort();
+        }
+      }, 5000);
+
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
         const data = await res.json();
-        if(data && data.display_name) {
-          setAddressString(data.display_name);
-        } else {
-          setAddressString(`Titik Maps: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        if (isMountedRef.current && abortControllerRef.current === controller) {
+          if(data && data.display_name) {
+            setAddressString(data.display_name);
+          } else {
+            setAddressString(`Titik Maps: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+          }
         }
       } catch (err) {
-        setAddressString(`Titik Maps: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        clearTimeout(timeoutId);
+        if (isMountedRef.current && abortControllerRef.current === controller) {
+          setAddressString(`Titik Maps: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        }
+      } finally {
+        if (isMountedRef.current && abortControllerRef.current === controller) {
+          setIsGettingAddress(false);
+        }
       }
     },
   });
@@ -66,6 +108,7 @@ function JualSampah() {
 
   const [estimateData, setEstimateData] = useState(null);
   const [isEstimating, setIsEstimating] = useState(false);
+  const [isGettingAddress, setIsGettingAddress] = useState(false);
 
   const [profile, setProfile] = useState(null);
   const [profilePic, setProfilePic] = useState(null);
@@ -197,6 +240,8 @@ function JualSampah() {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     setIsSearching(true);
+    setEstimateData(null);
+    setError("");
     try {
       const finalQuery = searchQuery.toLowerCase().includes('pekanbaru') 
         ? searchQuery 
@@ -389,7 +434,7 @@ function JualSampah() {
                   {Object.keys(wastePrices).map(key => (
                     <div 
                       key={key} 
-                      onClick={(e) => { e.stopPropagation(); setWasteType(key); setSubCategory(""); setIsDropdownOpen(false); }}
+                      onClick={(e) => { e.stopPropagation(); setWasteType(key); setSubCategory(""); setIsDropdownOpen(false); setEstimateData(null); setError(""); }}
                       style={{ padding: "1rem", display: "flex", alignItems: "center", gap: "1rem", borderBottom: "1px solid #f8fafc", cursor: "pointer", background: wasteType === key ? "#f0fdf4" : "white" }}
                       onMouseEnter={(e) => e.currentTarget.style.background = "#f8fafc"}
                       onMouseLeave={(e) => e.currentTarget.style.background = wasteType === key ? "#f0fdf4" : "white"}
@@ -416,6 +461,9 @@ function JualSampah() {
                   onClick={() => {
                     setSubCategory(cat.name);
                     setWasteType(cat.type);
+                    setEstimateData(null);
+                    setError("");
+                    setIsGettingAddress(false);
                   }}
                 >
                   {cat.name}
@@ -493,7 +541,7 @@ function JualSampah() {
                   attribution='&copy; OpenStreetMap'
                 />
                 <MapUpdater center={mapPosition} />
-                <MapPicker position={mapPosition} setPosition={setMapPosition} setAddressString={setAddressString} />
+                <MapPicker position={mapPosition} setPosition={setMapPosition} setAddressString={setAddressString} setEstimateData={setEstimateData} setError={setError} setIsGettingAddress={setIsGettingAddress} />
               </MapContainer>
             </div>
             <div className="jsp-weight-input" style={{ background: "#f8fafc", marginBottom: "1.5rem", padding: "0.5rem 1rem", alignItems: "center" }}>
@@ -555,7 +603,7 @@ function JualSampah() {
               </div>
             </div>
 
-            <button type="submit" className="jsp-btn-submit" disabled={isSubmitting} style={{ opacity: isSubmitting ? 0.7 : 1 }}>
+            <button type="submit" className="jsp-btn-submit" disabled={isSubmitting || !estimateData || isGettingAddress} style={{ opacity: (isSubmitting || !estimateData || isGettingAddress) ? 0.5 : 1, cursor: (!estimateData || isGettingAddress) ? "not-allowed" : "pointer" }}>
               {isSubmitting ? "Memproses..." : <><ShieldCheck size={20} /> Jual Sekarang</>}
             </button>
             <div style={{ textAlign: "center", fontSize: "0.75rem", color: "#64748b", marginTop: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem", fontWeight: "600" }}>
