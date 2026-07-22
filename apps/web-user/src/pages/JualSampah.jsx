@@ -244,8 +244,16 @@ function JualSampah() {
         const lng = pos.coords.longitude;
         setMapPosition([lat, lng]);
         
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, 5000);
+
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
           if (requestSeq.current !== currentSeq) return;
           
           const data = await res.json();
@@ -255,6 +263,7 @@ function JualSampah() {
             setAddressString(`Titik Maps: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
           }
         } catch (err) {
+          clearTimeout(timeoutId);
           if (requestSeq.current !== currentSeq) return;
           setAddressString(`Titik Maps: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
         } finally {
