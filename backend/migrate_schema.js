@@ -24,7 +24,7 @@ async function migrate() {
                 ADD COLUMN latitude DECIMAL(10,8) DEFAULT NULL,
                 ADD COLUMN longitude DECIMAL(11,8) DEFAULT NULL,
                 ADD COLUMN availability_status ENUM('AVAILABLE', 'BUSY', 'OFFLINE') DEFAULT 'OFFLINE',
-                ADD COLUMN service_radius DECIMAL(10,2) DEFAULT 5.00,
+                ADD COLUMN service_radius DECIMAL(10,2) DEFAULT 15.00,
                 ADD FOREIGN KEY (pengepul_id) REFERENCES users(id) ON DELETE SET NULL;
             `);
             console.log("Updated users table.");

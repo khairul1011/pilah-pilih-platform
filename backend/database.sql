@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
     latitude    DECIMAL(10,8)  DEFAULT NULL,
     longitude   DECIMAL(11,8)  DEFAULT NULL,
     availability_status ENUM('AVAILABLE', 'BUSY', 'OFFLINE') DEFAULT 'OFFLINE',
-    service_radius DECIMAL(10,2) DEFAULT 5.00,
+    service_radius DECIMAL(10,2) DEFAULT 15.00,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (pengepul_id) REFERENCES users(id) ON DELETE SET NULL
 );
