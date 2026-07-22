@@ -75,7 +75,9 @@ exports.estimateFee = (req, res) => {
                 return db.query("SELECT id FROM users WHERE role = 'petugas' LIMIT 1", (err2, fallbackRes) => {
                     if (err2 || fallbackRes.length === 0) return res.status(404).json({ success: false, message: "Belum ada petugas yang tersedia saat ini." });
                     // Return 999 to easily debug that fallback was hit
-                    res.json({ success: true, distance_km: 999.9, pickup_fee: total_price_est * 0.05, nearestPetugasId: fallbackRes[0].id, debug_err: err.message });
+                    const distance_km_fallback = 999.9;
+                    const pickup_fee_fallback = Math.round(distance_km_fallback * 1500);
+                    res.json({ success: true, distance_km: distance_km_fallback, pickup_fee: pickup_fee_fallback, nearestPetugasId: fallbackRes[0].id, debug_err: err.message });
                 });
             }
             
@@ -86,12 +88,7 @@ exports.estimateFee = (req, res) => {
             const nearestPetugas = petugasRes[0];
             const distance_km = nearestPetugas.distance;
             
-            let pickup_fee = 0;
-            if (distance_km > 10) {
-                pickup_fee = total_price_est * 0.05;
-            } else if (distance_km > 5) {
-                pickup_fee = total_price_est * 0.03;
-            }
+            let pickup_fee = Math.round(distance_km * 1500);
 
             res.json({ success: true, distance_km, pickup_fee, nearestPetugasId: nearestPetugas.id });
         });
@@ -135,7 +132,7 @@ exports.createPickup = (req, res) => {
                     
                     const nearestPetugas = fallbackRes[0];
                     const distance_km = 999.9;
-                    const pickup_fee = total_price_est * 0.05;
+                    const pickup_fee = Math.round(distance_km * 1500);
                     
                     const insertSql = `
                         INSERT INTO pickups
@@ -162,13 +159,8 @@ exports.createPickup = (req, res) => {
             const nearestPetugas = petugasRes[0];
             const distance_km = nearestPetugas.distance;
             
-            // Hitung Biaya Penjemputan (0-5 km: Gratis, >5-10 km: 3%, >10 km: 5%)
-            let pickup_fee = 0;
-            if (distance_km > 10) {
-                pickup_fee = total_price_est * 0.05;
-            } else if (distance_km > 5) {
-                pickup_fee = total_price_est * 0.03;
-            }
+            // Hitung Biaya Penjemputan: Rp 1.500 per kilometer
+            let pickup_fee = Math.round(distance_km * 1500);
 
             // 3. Simpan Order (Petugas langsung di-assign, status = pending/accepted sesuai flow, kita set 'accepted' karena langsung dapat petugas, 
             // atau 'pending' dan petugas_id diisi. Kita ikuti 'pending' tapi isi petugas_id).
