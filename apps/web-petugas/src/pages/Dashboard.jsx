@@ -287,11 +287,13 @@ function Dashboard() {
 
   const currentOrder = activePickups.length > 0 ? activePickups[0] : null;
   const currentHarga = currentOrder ? HARGA[currentOrder.waste_type?.toLowerCase()] || 1000 : 0;
-  const estPrice = currentOrder ? (currentOrder.estimated_weight * currentHarga) : 0;
+  const estPrice = currentOrder ? (currentOrder.estimated_weight * currentHarga) + parseFloat(currentOrder.pickup_fee || 0) : 0;
 
   const pendapatanHariIni = todayCompleted.reduce((sum, p) => {
     const h = HARGA[p.waste_type?.toLowerCase()] || 1000;
-    return sum + (parseFloat(p.actual_weight || 0) * h);
+    const trashValue = parseFloat(p.actual_weight || 0) * h;
+    const argo = parseFloat(p.pickup_fee || 0);
+    return sum + trashValue + argo;
   }, 0);
 
   const beratHariIni = todayCompleted.reduce((s, p) => s + (parseFloat(p.actual_weight) || 0), 0);
