@@ -23,7 +23,7 @@ function MapUpdater({ center }) {
   return null;
 }
 
-function MapPicker({ position, setPosition, setAddressString, setEstimateData, setError, setIsGettingAddress }) {
+function MapPicker({ position, setPosition, setAddressString, onMapClick, setEstimateData, setError, setIsGettingAddress }) {
   const abortControllerRef = useRef(null);
   const isMountedRef = useRef(true);
 
@@ -39,6 +39,7 @@ function MapPicker({ position, setPosition, setAddressString, setEstimateData, s
 
   useMapEvents({
     async click(e) {
+      if (onMapClick) onMapClick();
       const lat = e.latlng.lat;
       const lng = e.latlng.lng;
       setPosition([lat, lng]);
@@ -98,6 +99,19 @@ function JualSampah() {
   const [addressString, setAddressString] = useState("Pilih lokasi di peta (Tap pada peta)");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const abortControllerRef = useRef(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
   const [locationSaved, setLocationSaved] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [wastePhoto, setWastePhoto] = useState(null);
@@ -240,6 +254,10 @@ function JualSampah() {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     setIsSearching(true);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setIsGettingLocation(false);
     setEstimateData(null);
     setError("");
     try {
@@ -262,6 +280,81 @@ function JualSampah() {
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const handleCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Browser Anda tidak mendukung fitur Geolocation.");
+      return;
+    }
+    
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setIsGettingLocation(true);
+    setEstimateData(null);
+    setError("");
+    setAddressString("Mengambil lokasi Anda...");
+    
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        if (!isMountedRef.current || abortControllerRef.current !== controller) return;
+        
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setMapPosition([lat, lng]);
+        
+        const timeoutId = setTimeout(() => {
+          if (isMountedRef.current && abortControllerRef.current === controller) {
+            controller.abort();
+          }
+        }, 5000);
+
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`, {
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (!isMountedRef.current || abortControllerRef.current !== controller) return;
+          
+          const data = await res.json();
+          if(data && data.display_name) {
+            setAddressString(data.display_name);
+          } else {
+            setAddressString(`Titik Maps: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+          }
+        } catch (err) {
+          clearTimeout(timeoutId);
+          if (!isMountedRef.current || abortControllerRef.current !== controller) return;
+          setAddressString(`Titik Maps: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        } finally {
+          if (isMountedRef.current && abortControllerRef.current === controller) {
+            setIsGettingLocation(false);
+          }
+        }
+      },
+      (err) => {
+        if (!isMountedRef.current || abortControllerRef.current !== controller) return;
+        
+        setIsGettingLocation(false);
+        setAddressString("Gagal mengambil lokasi");
+        let errorMessage = "Gagal mengambil lokasi Anda.";
+        if (err.code === 1) errorMessage = "Akses lokasi ditolak. Harap izinkan akses lokasi di pengaturan browser Anda (Error Code: 1 - Permission Denied).";
+        else if (err.code === 2) errorMessage = "Lokasi tidak tersedia atau tidak dapat diakses (Error Code: 2 - Position Unavailable).";
+        else if (err.code === 3) errorMessage = "Waktu pencarian lokasi habis (Error Code: 3 - Timeout).";
+        
+        alert(errorMessage);
+        console.error("Geolocation Error:", err);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
   };
 
   if (isLoadingPrices) {
@@ -541,7 +634,20 @@ function JualSampah() {
                   attribution='&copy; OpenStreetMap'
                 />
                 <MapUpdater center={mapPosition} />
-                <MapPicker position={mapPosition} setPosition={setMapPosition} setAddressString={setAddressString} setEstimateData={setEstimateData} setError={setError} setIsGettingAddress={setIsGettingAddress} />
+                <MapPicker 
+                  position={mapPosition} 
+                  setPosition={setMapPosition} 
+                  setAddressString={setAddressString} 
+                  setEstimateData={setEstimateData} 
+                  setError={setError} 
+                  setIsGettingAddress={setIsGettingAddress} 
+                  onMapClick={() => {
+                    if (abortControllerRef.current) {
+                      abortControllerRef.current.abort();
+                    }
+                    setIsGettingLocation(false);
+                  }}
+                />
               </MapContainer>
             </div>
             <div className="jsp-weight-input" style={{ background: "#f8fafc", marginBottom: "1.5rem", padding: "0.5rem 1rem", alignItems: "center" }}>
@@ -553,6 +659,20 @@ function JualSampah() {
                 style={{ fontSize: "0.85rem", fontWeight: "600", color: "#475569", background: "transparent", width: "100%", outline: "none", border: "none" }}
                 required
               />
+              <button 
+                type="button" 
+                onClick={handleCurrentLocation}
+                disabled={isGettingLocation}
+                title="Gunakan Lokasi Sekarang"
+                style={{ background: "#f1f5f9", color: "#1e293b", border: "1px solid #cbd5e1", padding: "0.5rem", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", marginLeft: "0.5rem", flexShrink: 0, transition: "all 0.2s" }}
+              >
+                {isGettingLocation ? (
+                  <span style={{ fontSize: "0.8rem", fontWeight: "700" }}>...</span>
+                ) : (
+                  <MapPin size={16} /> 
+                )}
+              </button>
+
               <button 
                 type="button" 
                 onClick={() => {
