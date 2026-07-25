@@ -12,7 +12,7 @@ exports.getDashboardStats = (req, res) => {
             SELECT 
                 (SELECT IFNULL(SUM(total_price), 0) FROM pengepul_sales WHERE pengepul_id = ? AND status = 'completed') 
                 - 
-                (SELECT IFNULL(SUM(w.amount), 0) FROM wallet_transactions w JOIN users u ON w.user_id = u.id WHERE w.type = 'credit' AND u.role = 'user') 
+                (SELECT IFNULL(SUM(w.amount), 0) FROM wallet_transactions w JOIN users u ON w.user_id = u.id WHERE w.type = 'credit' AND w.payment_method = 'saldo' AND u.role = 'user') 
             AS laba
             -- Catatan: Pengeluaran asli harusnya dari transaksi Pengepul membayar Petugas/User. 
             -- Query di atas adalah simplifikasi.

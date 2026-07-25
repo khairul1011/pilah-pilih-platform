@@ -455,8 +455,8 @@ exports.getAdminStats = (req, res) => {
     total_sampah: `SELECT COALESCE(SUM(actual_weight),0) as val FROM pickups WHERE status='completed'`,
     total_penarikan: `SELECT COALESCE(SUM(amount),0) as val FROM withdrawals WHERE status='success'`,
     total_transaksi: `SELECT COUNT(*) as val FROM pickups`,
-    total_pendapatan: `SELECT COALESCE(SUM(amount),0) as val FROM wallet_transactions WHERE type='credit'`,
-    total_pengeluaran: `SELECT COALESCE(SUM(amount),0) as val FROM wallet_transactions WHERE type='debit'`,
+    total_pendapatan: `SELECT COALESCE(SUM(amount),0) as val FROM wallet_transactions WHERE type='credit' AND payment_method='saldo'`,
+    total_pengeluaran: `SELECT COALESCE(SUM(amount),0) as val FROM wallet_transactions WHERE type='debit' AND payment_method='saldo'`,
   };
 
   const results = {};
@@ -602,8 +602,8 @@ exports.getKeuanganReport = (req, res) => {
     SELECT 
       (SELECT COALESCE(SUM(balance),0) FROM wallets) as total_saldo_user,
       (SELECT COALESCE(SUM(amount),0) FROM withdrawals WHERE status='success') as total_penarikan,
-      (SELECT COALESCE(SUM(amount),0) FROM wallet_transactions WHERE type='credit') as total_pendapatan,
-      (SELECT COALESCE(SUM(amount),0) FROM wallet_transactions WHERE type='debit') as total_pengeluaran
+      (SELECT COALESCE(SUM(amount),0) FROM wallet_transactions WHERE type='credit' AND payment_method='saldo') as total_pendapatan,
+      (SELECT COALESCE(SUM(amount),0) FROM wallet_transactions WHERE type='debit' AND payment_method='saldo') as total_pengeluaran
   `;
   db.query(sql, (err, result) => {
     if (err) return res.status(500).json({ success: false, message: err.message });

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FiInbox, FiCheck, FiX, FiEye, FiSearch, FiRefreshCw, FiEdit2 } from 'react-icons/fi';
-import { getWaitingPickups, weighPickupItems, confirmAndCompletePickup } from '../api/pengepulAPI';
+import { getWaitingPickups, weighPickupItems, confirmAndCompletePickup, confirmDepositPickup } from '../api/pengepulAPI';
 import Modal from '../components/UI/Modal';
 import PageHeader from '../components/UI/PageHeader';
 import { toast } from '../components/UI/Toast';
@@ -62,15 +62,29 @@ const SampahMasuk = () => {
     }
   };
 
-  const handleConfirmSelesai = async (id) => {
+  const handleConfirmSelesai = async (id, paymentMethod) => {
       setSubmitting(true);
       try {
-          await confirmAndCompletePickup(id);
-          toast.success("Transaksi selesai, saldo nasabah telah ditambahkan");
+          await confirmAndCompletePickup(id, paymentMethod || 'saldo');
+          toast.success(paymentMethod === 'cash' ? "Transaksi cash dicatat. Mohon konfirmasi setoran ke Pengepul." : "Transaksi selesai, saldo nasabah telah ditambahkan");
           fetchData();
           setDetailItem(null);
       } catch(err) {
           toast.error(err.response?.data?.message || 'Gagal menyelesaikan transaksi');
+      } finally {
+          setSubmitting(false);
+      }
+  };
+
+  const handleConfirmDeposit = async (id) => {
+      setSubmitting(true);
+      try {
+          await confirmDepositPickup(id);
+          toast.success("Setoran cash dari Petugas berhasil dikonfirmasi!");
+          fetchData();
+          setDetailItem(null);
+      } catch(err) {
+          toast.error(err.response?.data?.message || 'Gagal mengkonfirmasi setoran');
       } finally {
           setSubmitting(false);
       }
@@ -199,10 +213,21 @@ const SampahMasuk = () => {
                           {item.status === 'weighing' && (
                             <button
                                 className="btn btn-success btn-sm btn-icon"
-                                title="Konfirmasi Transaksi"
-                                onClick={() => handleConfirmSelesai(item.id)}
+                                title="Konfirmasi Transaksi Saldo"
+                                onClick={() => handleConfirmSelesai(item.id, 'saldo')}
                             >
                                 <FiCheck />
+                            </button>
+                          )}
+                          {/* Tombol konfirmasi setoran cash — muncul jika completed via cash dan belum dikonfirmasi */}
+                          {item.status === 'completed' && item.deposit_status === 'pending' && (
+                            <button
+                                className="btn btn-warning btn-sm"
+                                title="Konfirmasi Terima Setoran Cash"
+                                onClick={() => handleConfirmDeposit(item.id)}
+                                style={{ fontSize: 11, padding: '4px 8px' }}
+                            >
+                                💵 Konfirmasi Setoran
                             </button>
                           )}
                         </div>

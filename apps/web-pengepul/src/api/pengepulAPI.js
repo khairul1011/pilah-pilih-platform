@@ -7,7 +7,8 @@ export const getMonthlyData = () => axiosInstance.get('/pengepul/monthly-stats')
 // ─── Sampah Masuk ─────────────────────────────────────────────────────────────
 export const getWaitingPickups = () => axiosInstance.get('/pickups/pengepul/waiting');
 export const weighPickupItems = (id, items) => axiosInstance.put(`/pickups/pengepul/weigh/${id}`, { items });
-export const confirmAndCompletePickup = (id) => axiosInstance.put(`/pickups/pengepul/confirm/${id}`);
+export const confirmAndCompletePickup = (id, payment_method) => axiosInstance.put(`/pickups/pengepul/confirm/${id}`, { payment_method });
+export const confirmDepositPickup = (id) => axiosInstance.patch(`/pickups/pengepul/confirm-deposit/${id}`);
 export const getIncomingWaste = (params) => axiosInstance.get('/pengepul/incoming-waste', { params });
 export const updateWasteStatus = (id, status, catatan) =>
   axiosInstance.put(`/pengepul/incoming-waste/${id}/status`, { status, catatan });
