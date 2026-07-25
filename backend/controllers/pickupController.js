@@ -404,21 +404,40 @@ exports.confirmAndComplete = (req, res) => {
 
             // Wallet/Saldo transfer jika user memilih 'saldo'
             const finalAmount = Math.max(0, pickup.total_price - pickup.pickup_fee);
-            if (payment_method === 'saldo' && finalAmount > 0) {
-                // Pastikan wallet user ada
-                db.query("SELECT id FROM wallets WHERE user_id = ?", [pickup.user_id], (errWal, walRes) => {
-                    if (!errWal && walRes.length === 0) {
-                        db.query("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [pickup.user_id, finalAmount]);
-                    } else if (!errWal) {
-                        db.query("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [finalAmount, pickup.user_id]);
-                    }
-                    
-                    // Catat transaksi
-                    db.query(
-                        "INSERT INTO wallet_transactions (user_id, amount, type, description) VALUES (?, ?, 'credit', ?)", 
-                        [pickup.user_id, finalAmount, `Penjualan sampah (Order #${pickupId})`]
-                    );
-                });
+            if (payment_method === 'saldo') {
+                if (finalAmount > 0) {
+                    // Pastikan wallet user ada
+                    db.query("SELECT id FROM wallets WHERE user_id = ?", [pickup.user_id], (errWal, walRes) => {
+                        if (!errWal && walRes.length === 0) {
+                            db.query("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [pickup.user_id, finalAmount]);
+                        } else if (!errWal) {
+                            db.query("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [finalAmount, pickup.user_id]);
+                        }
+                        
+                        // Catat transaksi user
+                        db.query(
+                            "INSERT INTO wallet_transactions (user_id, amount, type, description) VALUES (?, ?, 'credit', ?)", 
+                            [pickup.user_id, finalAmount, `Penjualan sampah (Order #${pickupId})`]
+                        );
+                    });
+                }
+                
+                // Tambahkan pendapatan argo ke wallet petugas
+                if (pickup.petugas_id && pickup.pickup_fee > 0) {
+                    db.query("SELECT id FROM wallets WHERE user_id = ?", [pickup.petugas_id], (errWal2, walRes2) => {
+                        if (!errWal2 && walRes2.length === 0) {
+                            db.query("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [pickup.petugas_id, pickup.pickup_fee]);
+                        } else if (!errWal2) {
+                            db.query("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [pickup.pickup_fee, pickup.petugas_id]);
+                        }
+                        
+                        // Catat transaksi petugas
+                        db.query(
+                            "INSERT INTO wallet_transactions (user_id, amount, type, description) VALUES (?, ?, 'credit', ?)", 
+                            [pickup.petugas_id, pickup.pickup_fee, `Pendapatan argo penjemputan (Order #${pickupId})`]
+                        );
+                    });
+                }
             }
 
             logStatusChange(pickupId, 'completed', action_user_id);
