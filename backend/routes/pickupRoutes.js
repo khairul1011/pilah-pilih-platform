@@ -15,6 +15,7 @@ const {
     getWaitingPickups,
     weighItems,
     confirmAndComplete,
+    confirmDeposit,
     getPetugasContacts,
     estimateFee,
     getAllMyPickups,
@@ -37,6 +38,7 @@ router.get("/contacts", verifyToken, roleMiddleware("petugas", "admin"), getPetu
 router.get("/pengepul/waiting", verifyToken, roleMiddleware("pengepul"), getWaitingPickups);
 router.put("/pengepul/weigh/:id", verifyToken, roleMiddleware("pengepul", "petugas"), weighItems);
 router.put("/pengepul/confirm/:id", verifyToken, roleMiddleware("pengepul", "petugas"), confirmAndComplete);
+router.patch("/pengepul/confirm-deposit/:id", verifyToken, roleMiddleware("pengepul"), confirmDeposit);
 
 // ================= SHARED MUTATIONS =================
 router.put("/status/:id", verifyToken, roleMiddleware("user", "petugas", "pengepul", "admin"), updateStatus);

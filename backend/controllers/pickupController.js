@@ -31,7 +31,11 @@ exports.runMigration = async (req, res) => {
             "ALTER TABLE waste_prices CHANGE COLUMN price_per_kg price_user_per_kg DECIMAL(10,2) NOT NULL",
             "ALTER TABLE waste_prices ADD COLUMN price_pengepul_per_kg DECIMAL(10,2) NOT NULL DEFAULT 0.00",
             "UPDATE waste_prices SET price_pengepul_per_kg = price_user_per_kg + 500",
-            "UPDATE users SET latitude = 0.5333, longitude = 101.4500, service_radius = 50.00 WHERE role = 'petugas'"
+            "UPDATE users SET latitude = 0.5333, longitude = 101.4500, service_radius = 50.00 WHERE role = 'petugas'",
+            // Migration baru: audit trail cash
+            "ALTER TABLE pickups ADD COLUMN deposit_status ENUM('pending','confirmed') DEFAULT NULL",
+            "ALTER TABLE pickups ADD COLUMN deposit_confirmed_at TIMESTAMP NULL DEFAULT NULL",
+            "ALTER TABLE wallet_transactions ADD COLUMN payment_method ENUM('saldo','cash') NOT NULL DEFAULT 'saldo'"
         ];
 
         for (let q of queries) {
@@ -383,46 +387,46 @@ exports.weighItems = (req, res) => {
 // ============================================================
 exports.confirmAndComplete = (req, res) => {
     const pickupId = req.params.id;
-    const action_user_id = req.user.id; // Bisa pengepul atau petugas
+    const action_user_id = req.user.id;
     const { payment_method } = req.body; // 'cash' atau 'saldo'
 
+    // Validasi payment_method di awal — cegah request hang jika nilai tidak dikenal
+    if (!['saldo', 'cash'].includes(payment_method)) {
+        return res.status(400).json({ success: false, message: `Metode pembayaran tidak valid: '${payment_method}'. Gunakan 'saldo' atau 'cash'.` });
+    }
+
     db.query("SELECT * FROM pickups WHERE id = ?", [pickupId], (err, results) => {
-        if(err) return res.status(500).json({ success: false, message: err.message });
-        if(results.length === 0) return res.status(404).json({ success: false, message: "Order tidak ditemukan" });
+        if (err) return res.status(500).json({ success: false, message: err.message });
+        if (results.length === 0) return res.status(404).json({ success: false, message: "Order tidak ditemukan" });
 
         const pickup = results[0];
         if (pickup.status !== 'weighing') return res.status(400).json({ success: false, message: "Order belum ditimbang!" });
 
-        // Update status ke completed dan isi finished_at
         db.query("UPDATE pickups SET status = 'completed', finished_at = CURRENT_TIMESTAMP WHERE id = ?", [pickupId], (errUpd) => {
-            if(errUpd) return res.status(500).json({ success: false, message: errUpd.message });
+            if (errUpd) return res.status(500).json({ success: false, message: errUpd.message });
 
-            // Reset petugas_id status to AVAILABLE
+            // Reset ketersediaan petugas (fire-and-forget, tidak blocking response)
             if (pickup.petugas_id) {
                 db.query("UPDATE users SET availability_status = 'AVAILABLE' WHERE id = ?", [pickup.petugas_id]);
             }
 
-            // Wallet/Saldo transfer jika user memilih 'saldo'
             const finalAmount = Math.max(0, pickup.total_price - pickup.pickup_fee);
+
             if (payment_method === 'saldo') {
+                // ── SALDO: kredit digital ke wallet user dan petugas ──
                 if (finalAmount > 0) {
-                    // Pastikan wallet user ada
                     db.query("SELECT id FROM wallets WHERE user_id = ?", [pickup.user_id], (errWal, walRes) => {
                         if (!errWal && walRes.length === 0) {
                             db.query("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [pickup.user_id, finalAmount]);
                         } else if (!errWal) {
                             db.query("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [finalAmount, pickup.user_id]);
                         }
-                        
-                        // Catat transaksi user
                         db.query(
-                            "INSERT INTO wallet_transactions (user_id, amount, type, description) VALUES (?, ?, 'credit', ?)", 
+                            "INSERT INTO wallet_transactions (user_id, amount, type, description, payment_method) VALUES (?, ?, 'credit', ?, 'saldo')",
                             [pickup.user_id, finalAmount, `Penjualan sampah (Order #${pickupId})`]
                         );
                     });
                 }
-                
-                // Tambahkan pendapatan argo ke wallet petugas
                 if (pickup.petugas_id && pickup.pickup_fee > 0) {
                     db.query("SELECT id FROM wallets WHERE user_id = ?", [pickup.petugas_id], (errWal2, walRes2) => {
                         if (!errWal2 && walRes2.length === 0) {
@@ -430,20 +434,85 @@ exports.confirmAndComplete = (req, res) => {
                         } else if (!errWal2) {
                             db.query("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [pickup.pickup_fee, pickup.petugas_id]);
                         }
-                        
-                        // Catat transaksi petugas
                         db.query(
-                            "INSERT INTO wallet_transactions (user_id, amount, type, description) VALUES (?, ?, 'credit', ?)", 
+                            "INSERT INTO wallet_transactions (user_id, amount, type, description, payment_method) VALUES (?, ?, 'credit', ?, 'saldo')",
                             [pickup.petugas_id, pickup.pickup_fee, `Pendapatan argo penjemputan (Order #${pickupId})`]
                         );
                     });
                 }
-            }
+                logStatusChange(pickupId, 'completed', action_user_id);
+                return res.json({ success: true, message: 'Transaksi dikonfirmasi. Saldo dompet diperbarui.' });
 
-            logStatusChange(pickupId, 'completed', action_user_id);
-            res.json({ success: true, message: `Transaksi dikonfirmasi menggunakan ${payment_method === 'saldo' ? 'Saldo Dompet' : 'Cash'}.` });
+            } else if (payment_method === 'cash') {
+                // ── CASH: catat audit trail dalam satu DB transaction ──
+                // getConnection() eksplisit wajib agar beginTransaction, query, dan commit
+                // berjalan di koneksi yang SAMA (bukan dari pool yang berbeda-beda).
+                return db.getConnection((connErr, conn) => {
+                    if (connErr) return res.status(500).json({ success: false, message: connErr.message });
+
+                    conn.promise().beginTransaction()
+                        .then(() => conn.promise().query(
+                            "INSERT INTO petugas_earnings (petugas_id, pickup_id, amount) VALUES (?,?,?)",
+                            [pickup.petugas_id, pickupId, pickup.pickup_fee]
+                        ))
+                        .then(() => conn.promise().query(
+                            "INSERT INTO wallet_transactions (user_id, amount, type, description, payment_method) VALUES (?,?,'credit',?,'cash')",
+                            [pickup.petugas_id, pickup.pickup_fee, `Pendapatan argo cash (Order #${pickupId})`]
+                        ))
+                        .then(() => conn.promise().query(
+                            "INSERT INTO wallet_transactions (user_id, amount, type, description, payment_method) VALUES (?,?,'credit',?,'cash')",
+                            [pickup.user_id, finalAmount, `Penjualan sampah tunai (Order #${pickupId})`]
+                        ))
+                        .then(() => conn.promise().query(
+                            "UPDATE pickups SET deposit_status='pending' WHERE id=?",
+                            [pickupId]
+                        ))
+                        .then(() => conn.promise().commit())
+                        .then(() => {
+                            conn.release();
+                            logStatusChange(pickupId, 'completed', action_user_id);
+                            res.json({ success: true, message: 'Transaksi cash dicatat. Mohon konfirmasi setoran ke Pengepul.' });
+                        })
+                        .catch(err => {
+                            // Rollback, release koneksi, kirim error ke client
+                            conn.promise().rollback().finally(() => {
+                                conn.release();
+                                res.status(500).json({ success: false, message: 'Gagal mencatat transaksi cash: ' + err.message });
+                            });
+                        });
+                });
+            }
         });
     });
+};
+
+// ============================================================
+// PENGEPUL — Konfirmasi Terima Setoran Cash dari Petugas
+// ============================================================
+exports.confirmDeposit = (req, res) => {
+    const pickupId = req.params.id;
+    const pengepulId = req.user.id; // Dari token, bukan body
+
+    // WHERE pengepul_id = ? : cegah Pengepul A konfirmasi milik Pengepul B
+    // WHERE deposit_status = 'pending' : guard idempotency di level DB
+    //   → jika tombol diklik dua kali, MySQL row lock memastikan hanya satu UPDATE yang berhasil
+    //   → affectedRows === 0 pada request kedua → return error, tidak ada efek ganda
+    db.query(
+        `UPDATE pickups
+         SET deposit_status = 'confirmed', deposit_confirmed_at = CURRENT_TIMESTAMP
+         WHERE id = ? AND pengepul_id = ? AND status = 'completed' AND deposit_status = 'pending'`,
+        [pickupId, pengepulId],
+        (err, result) => {
+            if (err) return res.status(500).json({ success: false, message: err.message });
+            if (result.affectedRows === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Konfirmasi tidak valid: order bukan milik Anda, sudah dikonfirmasi, atau status tidak sesuai.'
+                });
+            }
+            res.json({ success: true, message: 'Setoran berhasil dikonfirmasi.' });
+        }
+    );
 };
 
 // ============================================================
