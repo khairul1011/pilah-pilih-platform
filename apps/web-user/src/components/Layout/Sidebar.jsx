@@ -47,15 +47,15 @@ function Sidebar({ onLogout, isOpen, onClose }) {
   ];
 
   return (
-    <aside className={`user-sidebar ${isOpen ? "open" : ""}`}>
+    <aside className={`sidebar ${isOpen ? "open" : ""}`}>
       {/* Brand */}
-      <div className="sidebar-brand-wrap">
-        <div className="sidebar-logo-icon">
+      <div className="sidebar-header">
+        <div className="sidebar-logo">
           <Leaf size={22} />
         </div>
-        <div style={{ flex: 1 }}>
+        <div className="sidebar-brand">
           <span className="sidebar-brand-name">PilahPilih</span>
-          <span className="sidebar-brand-tagline">Daur Ulang, Raih Untung</span>
+          <span className="sidebar-brand-sub">Daur Ulang, Raih Untung</span>
         </div>
         {onClose && (
           <button className="sidebar-close-btn" onClick={onClose}>
@@ -65,28 +65,28 @@ function Sidebar({ onLogout, isOpen, onClose }) {
       </div>
 
       {/* Menu */}
-      <nav className="sidebar-nav">
+      <div className="sidebar-menu">
         {menuGroups.map((group) => (
-          <div key={group.label} className="sidebar-group">
-            <span className="sidebar-group-label">{group.label}</span>
+          <div key={group.label}>
+            <div className="sidebar-section-label">{group.label}</div>
             {group.items.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`sidebar-nav-item ${isActive(item.path) ? "active" : ""}`}
+                className={`menu-item ${isActive(item.path) ? "active" : ""}`}
               >
-                <span className="sidebar-nav-icon">{item.icon}</span>
+                <span className="menu-icon">{item.icon}</span>
                 <span>{item.label}</span>
               </Link>
             ))}
           </div>
         ))}
-      </nav>
+      </div>
 
       {/* Footer */}
-      <div className="sidebar-footer-wrap">
-        <button className="sidebar-logout-btn" onClick={handleLogout}>
-          <LogOut size={18} />
+      <div className="sidebar-footer">
+        <button className="menu-item btn-ghost" onClick={handleLogout} style={{ width: '100%', border: 'none', cursor: 'pointer', color: 'var(--danger)', background: 'rgba(239,68,68,0.05)' }}>
+          <span className="menu-icon"><LogOut size={18} /></span>
           <span>Keluar</span>
         </button>
       </div>

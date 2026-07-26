@@ -5,12 +5,22 @@ import {
 } from "lucide-react";
 import { logout } from "../services/authService";
 
-const navItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/orders", icon: ClipboardList, label: "Order Masuk" },
-  { to: "/riwayat", icon: History, label: "Riwayat" },
-  { to: "/timbang", icon: Scale, label: "Timbang" },
-  { to: "/profil", icon: User, label: "Profil" },
+const menuGroups = [
+  {
+    label: "Operasional",
+    items: [
+      { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+      { to: "/orders", icon: ClipboardList, label: "Order Masuk" },
+      { to: "/riwayat", icon: History, label: "Riwayat" },
+      { to: "/timbang", icon: Scale, label: "Timbang" },
+    ]
+  },
+  {
+    label: "Akun",
+    items: [
+      { to: "/profil", icon: User, label: "Profil" },
+    ]
+  }
 ];
 
 function Sidebar({ user }) {
@@ -26,35 +36,39 @@ function Sidebar({ user }) {
   return (
     <aside className="sidebar">
       {/* Logo */}
-      <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">
+      <div className="sidebar-header">
+        <div className="sidebar-logo">
           <Recycle size={22} />
         </div>
-        <div className="sidebar-logo-text">
-          <strong>Pilah Pilih</strong>
-          <span>Petugas Panel</span>
+        <div className="sidebar-brand">
+          <strong className="sidebar-brand-name">Pilah Pilih</strong>
+          <span className="sidebar-brand-sub">Petugas Panel</span>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="sidebar-nav">
-        <span className="nav-section-label">Menu Utama</span>
-        {navItems.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
-          >
-            <span className="nav-icon"><Icon size={18} /></span>
-            {label}
-          </NavLink>
+      <div className="sidebar-menu">
+        {menuGroups.map((group) => (
+          <div key={group.label}>
+            <div className="sidebar-section-label">{group.label}</div>
+            {group.items.map(({ to, icon: Icon, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) => `menu-item${isActive ? " active" : ""}`}
+              >
+                <span className="menu-icon"><Icon size={18} /></span>
+                <span>{label}</span>
+              </NavLink>
+            ))}
+          </div>
         ))}
-      </nav>
+      </div>
 
       {/* Bottom user block */}
-      <div className="sidebar-bottom">
+      <div className="sidebar-footer">
         <div className="sidebar-user" onClick={() => navigate("/profil")}>
-          <div className="sidebar-avatar">
+          <div className="sidebar-user-avatar">
             {initial}
           </div>
           <div className="sidebar-user-info">
@@ -64,10 +78,10 @@ function Sidebar({ user }) {
         </div>
         <button
           onClick={handleLogout}
-          className="nav-link"
-          style={{ width: "100%", marginTop: "0.5rem", color: "#f87171", background: "rgba(239,68,68,0.07)", border: "none" }}
+          className="menu-item btn-ghost"
+          style={{ width: "100%", marginTop: "0.5rem", color: "var(--danger)", background: "rgba(239,68,68,0.05)", border: "none" }}
         >
-          <span className="nav-icon"><LogOut size={18} /></span>
+          <span className="menu-icon"><LogOut size={18} /></span>
           Keluar
         </button>
       </div>
