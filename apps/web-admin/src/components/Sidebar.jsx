@@ -85,21 +85,19 @@ export default function Sidebar({ isOpen, onClose }) {
 
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
         {/* Logo */}
-        <div className="sidebar-logo">
-          <div className="sidebar-logo-inner">
-            <div className="sidebar-logo-icon">♻️</div>
-            <div>
-              <h1>Pilah Pilih</h1>
-              <p>Admin Panel</p>
-            </div>
+        <div className="sidebar-header">
+          <div className="sidebar-logo">♻️</div>
+          <div className="sidebar-brand">
+            <span className="sidebar-brand-name">Pilah Pilih</span>
+            <span className="sidebar-brand-sub">Admin Panel</span>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="sidebar-nav">
+        <div className="sidebar-menu">
           {navItems.map((group) => (
             <div key={group.group}>
-              <div className="sidebar-section-title">{group.group}</div>
+              <div className="sidebar-section-label">{group.group}</div>
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.to ||
@@ -111,15 +109,15 @@ export default function Sidebar({ isOpen, onClose }) {
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    className={`sidebar-link ${isActive ? 'active' : ''}`}
+                    className={`menu-item ${isActive ? 'active' : ''}`}
                     onClick={onClose}
                   >
-                    <span className="sidebar-link-icon">
+                    <span className="menu-icon">
                       <Icon size={18} />
                     </span>
-                    <span className="sidebar-link-text">{item.label}</span>
+                    <span style={{ flex: 1 }}>{item.label}</span>
                     {badgeCount > 0 && (
-                      <span className="sidebar-badge">{badgeCount}</span>
+                      <span className="menu-badge">{badgeCount > 99 ? '99+' : badgeCount}</span>
                     )}
                     {badgeCount === 0 && isActive && (
                       <ChevronRight size={14} style={{ opacity: 0.6 }} />
@@ -129,19 +127,19 @@ export default function Sidebar({ isOpen, onClose }) {
               })}
             </div>
           ))}
-        </nav>
+        </div>
 
         {/* Footer */}
         <div className="sidebar-footer">
           <div className="sidebar-user">
             <div className="sidebar-user-avatar">A</div>
             <div className="sidebar-user-info">
-              <h4>Admin</h4>
-              <p>Super Admin</p>
+              <strong>Admin</strong>
+              <span>Super Admin</span>
             </div>
             <LogOut 
               size={16} 
-              style={{ color: 'rgba(255,255,255,0.5)', marginLeft: 'auto', cursor: 'pointer' }} 
+              style={{ color: '#ef4444', marginLeft: 'auto', cursor: 'pointer' }} 
               onClick={handleLogout}
               title="Keluar"
             />

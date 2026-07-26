@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 /* ═══════════════════════════════════════════════
    DESIGN TOKENS
@@ -40,17 +40,21 @@
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
+button, input, select, textarea {
+  font-family: inherit;
+}
+
 /* ═══════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════ */
-.user-sidebar {
+.sidebar {
   position: fixed;
   top: 0;
   left: 0;
@@ -67,12 +71,12 @@ body {
 
 /* Mobile: hide by default */
 @media (max-width: 1023px) {
-  .user-sidebar {
+  .sidebar {
     transform: translateX(-100%);
     box-shadow: var(--shadow-lg);
   }
 
-  .user-sidebar.open {
+  .sidebar.open {
     transform: translateX(0);
   }
 }
@@ -86,7 +90,7 @@ body {
 }
 
 /* Brand */
-.sidebar-brand-wrap {
+.sidebar-header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -94,7 +98,7 @@ body {
   border-bottom: 1px solid var(--border-soft);
 }
 
-.sidebar-logo-icon {
+.sidebar-logo {
   width: 40px;
   height: 40px;
   background: linear-gradient(135deg, var(--primary), var(--brand-green));
@@ -109,12 +113,12 @@ body {
 .sidebar-brand-name {
   display: block;
   font-size: 1.05rem;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text);
   letter-spacing: -0.3px;
 }
 
-.sidebar-brand-tagline {
+.sidebar-brand-sub {
   display: block;
   font-size: 0.7rem;
   color: var(--text-muted);
@@ -133,7 +137,7 @@ body {
 }
 
 /* Nav */
-.sidebar-nav {
+.sidebar-menu {
   flex: 1;
   padding: 1rem 0.75rem;
   display: flex;
@@ -145,41 +149,54 @@ body {
   margin-bottom: 1.25rem;
 }
 
-.sidebar-group-label {
+.sidebar-section-label {
   display: block;
   font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: var(--text-muted);
+  color: #64748b; /* Adjusted for WCAG 4.5:1 contrast against white */
   padding: 0 0.75rem;
   margin-bottom: 0.4rem;
 }
 
-.sidebar-nav-item {
+.menu-item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0.7rem 0.75rem;
   border-radius: var(--radius-sm);
   text-decoration: none;
-  color: var(--text-secondary);
+  color: #64748b; /* Matches pengepul section label grey, passes WCAG */
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 500;
   transition: all 0.15s;
+  position: relative;
 }
 
-.sidebar-nav-item:hover {
+.menu-item:hover {
   background: var(--bg);
   color: var(--text);
 }
 
-.sidebar-nav-item.active {
-  background: var(--brand-green);
-  color: white;
+.menu-item.active {
+  background: var(--primary-soft);
+  color: var(--brand-green);
+  font-weight: 600;
 }
 
-.sidebar-nav-icon {
+.menu-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  background: var(--brand-green);
+  border-radius: 0 4px 4px 0;
+}
+
+.menu-icon {
   width: 32px;
   height: 32px;
   display: flex;
@@ -191,13 +208,8 @@ body {
   transition: background 0.15s;
 }
 
-.sidebar-nav-item.active .sidebar-nav-icon {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-}
-
 /* Footer */
-.sidebar-footer-wrap {
+.sidebar-footer {
   padding: 1rem 0.75rem 1.5rem;
   border-top: 1px solid var(--border-soft);
 }

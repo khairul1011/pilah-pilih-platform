@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 /* ─── CSS Variables (Light Theme Admin Style) ─────────────────────────────────────────────────────────── */
 :root {
@@ -49,12 +49,16 @@ html { scroll-behavior: smooth; }
 body {
   background: var(--bg-color);
   color: var(--text-main);
-  font-family: 'Inter', 'Outfit', -apple-system, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 14px;
   line-height: 1.6;
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
 }
 
 /* ─── Layout ─────────────────────────────────────────────────────────────────── */
