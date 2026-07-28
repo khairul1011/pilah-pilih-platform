@@ -385,105 +385,112 @@ exports.weighItems = (req, res) => {
 // ============================================================
 // PENGEPUL — Konfirmasi Transaksi & Selesaikan
 // ============================================================
-exports.confirmAndComplete = (req, res) => {
+exports.confirmAndComplete = async (req, res) => {
     const pickupId = req.params.id;
     const action_user_id = req.user.id;
     const { payment_method } = req.body; // 'cash' atau 'saldo'
 
-    // Validasi payment_method di awal — cegah request hang jika nilai tidak dikenal
+    // Validasi payment_method di awal
     if (!['saldo', 'cash'].includes(payment_method)) {
         return res.status(400).json({ success: false, message: `Metode pembayaran tidak valid: '${payment_method}'. Gunakan 'saldo' atau 'cash'.` });
     }
 
-    db.query("SELECT * FROM pickups WHERE id = ?", [pickupId], (err, results) => {
-        if (err) return res.status(500).json({ success: false, message: err.message });
+    try {
+        const [results] = await db.promise().query("SELECT * FROM pickups WHERE id = ?", [pickupId]);
         if (results.length === 0) return res.status(404).json({ success: false, message: "Order tidak ditemukan" });
 
         const pickup = results[0];
         if (pickup.status !== 'weighing') return res.status(400).json({ success: false, message: "Order belum ditimbang!" });
 
-        db.query("UPDATE pickups SET status = 'completed', finished_at = CURRENT_TIMESTAMP WHERE id = ?", [pickupId], (errUpd) => {
-            if (errUpd) return res.status(500).json({ success: false, message: errUpd.message });
+        const finalAmount = Math.max(0, pickup.total_price - pickup.pickup_fee);
 
-            // Reset ketersediaan petugas (fire-and-forget, tidak blocking response)
+        // Gunakan 1 koneksi eksklusif untuk seluruh transaksi DB
+        const conn = await db.promise().getConnection();
+        
+        try {
+            await conn.beginTransaction();
+
+            // 1. Update status utama ke completed (Sekarang DI DALAM transaction!)
+            await conn.query(
+                "UPDATE pickups SET status = 'completed', finished_at = CURRENT_TIMESTAMP WHERE id = ?", 
+                [pickupId]
+            );
+
+            // 2. Reset petugas availability (opsional tapi aman dalam transaction)
             if (pickup.petugas_id) {
-                db.query("UPDATE users SET availability_status = 'AVAILABLE' WHERE id = ?", [pickup.petugas_id]);
+                await conn.query("UPDATE users SET availability_status = 'AVAILABLE' WHERE id = ?", [pickup.petugas_id]);
             }
 
-            const finalAmount = Math.max(0, pickup.total_price - pickup.pickup_fee);
-
+            // 3. Eksekusi alur pembayaran
             if (payment_method === 'saldo') {
-                // ── SALDO: kredit digital ke wallet user dan petugas ──
+                // ── SALDO ──
                 if (finalAmount > 0) {
-                    db.query("SELECT id FROM wallets WHERE user_id = ?", [pickup.user_id], (errWal, walRes) => {
-                        if (!errWal && walRes.length === 0) {
-                            db.query("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [pickup.user_id, finalAmount]);
-                        } else if (!errWal) {
-                            db.query("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [finalAmount, pickup.user_id]);
-                        }
-                        db.query(
-                            "INSERT INTO wallet_transactions (user_id, amount, type, description, payment_method) VALUES (?, ?, 'credit', ?, 'saldo')",
-                            [pickup.user_id, finalAmount, `Penjualan sampah (Order #${pickupId})`]
-                        );
-                    });
+                    const [walRes] = await conn.query("SELECT id FROM wallets WHERE user_id = ? FOR UPDATE", [pickup.user_id]);
+                    if (walRes.length === 0) {
+                        await conn.query("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [pickup.user_id, finalAmount]);
+                    } else {
+                        await conn.query("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [finalAmount, pickup.user_id]);
+                    }
+                    await conn.query(
+                        "INSERT INTO wallet_transactions (user_id, amount, type, description, payment_method) VALUES (?, ?, 'credit', ?, 'saldo')",
+                        [pickup.user_id, finalAmount, `Penjualan sampah (Order #${pickupId})`]
+                    );
                 }
+                
                 if (pickup.petugas_id && pickup.pickup_fee > 0) {
-                    db.query("SELECT id FROM wallets WHERE user_id = ?", [pickup.petugas_id], (errWal2, walRes2) => {
-                        if (!errWal2 && walRes2.length === 0) {
-                            db.query("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [pickup.petugas_id, pickup.pickup_fee]);
-                        } else if (!errWal2) {
-                            db.query("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [pickup.pickup_fee, pickup.petugas_id]);
-                        }
-                        db.query(
-                            "INSERT INTO wallet_transactions (user_id, amount, type, description, payment_method) VALUES (?, ?, 'credit', ?, 'saldo')",
-                            [pickup.petugas_id, pickup.pickup_fee, `Pendapatan argo penjemputan (Order #${pickupId})`]
-                        );
-                    });
+                    const [walRes2] = await conn.query("SELECT id FROM wallets WHERE user_id = ? FOR UPDATE", [pickup.petugas_id]);
+                    if (walRes2.length === 0) {
+                        await conn.query("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [pickup.petugas_id, pickup.pickup_fee]);
+                    } else {
+                        await conn.query("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [pickup.pickup_fee, pickup.petugas_id]);
+                    }
+                    await conn.query(
+                        "INSERT INTO wallet_transactions (user_id, amount, type, description, payment_method) VALUES (?, ?, 'credit', ?, 'saldo')",
+                        [pickup.petugas_id, pickup.pickup_fee, `Pendapatan argo penjemputan (Order #${pickupId})`]
+                    );
                 }
-                logStatusChange(pickupId, 'completed', action_user_id);
-                return res.json({ success: true, message: 'Transaksi dikonfirmasi. Saldo dompet diperbarui.' });
-
             } else if (payment_method === 'cash') {
-                // ── CASH: catat audit trail dalam satu DB transaction ──
-                // getConnection() eksplisit wajib agar beginTransaction, query, dan commit
-                // berjalan di koneksi yang SAMA (bukan dari pool yang berbeda-beda).
-                return db.getConnection((connErr, conn) => {
-                    if (connErr) return res.status(500).json({ success: false, message: connErr.message });
-
-                    conn.promise().beginTransaction()
-                        .then(() => conn.promise().query(
-                            "INSERT INTO petugas_earnings (petugas_id, pickup_id, amount) VALUES (?,?,?)",
-                            [pickup.petugas_id, pickupId, pickup.pickup_fee]
-                        ))
-                        .then(() => conn.promise().query(
-                            "INSERT INTO wallet_transactions (user_id, amount, type, description, payment_method) VALUES (?,?,'credit',?,'cash')",
-                            [pickup.petugas_id, pickup.pickup_fee, `Pendapatan argo cash (Order #${pickupId})`]
-                        ))
-                        .then(() => conn.promise().query(
-                            "INSERT INTO wallet_transactions (user_id, amount, type, description, payment_method) VALUES (?,?,'credit',?,'cash')",
-                            [pickup.user_id, finalAmount, `Penjualan sampah tunai (Order #${pickupId})`]
-                        ))
-                        .then(() => conn.promise().query(
-                            "UPDATE pickups SET deposit_status='pending' WHERE id=?",
-                            [pickupId]
-                        ))
-                        .then(() => conn.promise().commit())
-                        .then(() => {
-                            conn.release();
-                            logStatusChange(pickupId, 'completed', action_user_id);
-                            res.json({ success: true, message: 'Transaksi cash dicatat. Mohon konfirmasi setoran ke Pengepul.' });
-                        })
-                        .catch(err => {
-                            // Rollback, release koneksi, kirim error ke client
-                            conn.promise().rollback().finally(() => {
-                                conn.release();
-                                res.status(500).json({ success: false, message: 'Gagal mencatat transaksi cash: ' + err.message });
-                            });
-                        });
-                });
+                // ── CASH ──
+                await conn.query(
+                    "INSERT INTO petugas_earnings (petugas_id, pickup_id, amount) VALUES (?,?,?)",
+                    [pickup.petugas_id, pickupId, pickup.pickup_fee]
+                );
+                await conn.query(
+                    "INSERT INTO wallet_transactions (user_id, amount, type, description, payment_method) VALUES (?,?,'credit',?,'cash')",
+                    [pickup.petugas_id, pickup.pickup_fee, `Pendapatan argo cash (Order #${pickupId})`]
+                );
+                await conn.query(
+                    "INSERT INTO wallet_transactions (user_id, amount, type, description, payment_method) VALUES (?,?,'credit',?,'cash')",
+                    [pickup.user_id, finalAmount, `Penjualan sampah tunai (Order #${pickupId})`]
+                );
+                await conn.query(
+                    "UPDATE pickups SET deposit_status='pending' WHERE id=?",
+                    [pickupId]
+                );
             }
-        });
-    });
+
+            // Commit transaction jika semuanya sukses
+            await conn.commit();
+            conn.release();
+
+            // Selesai DB transaction, jalankan helper log (fire-and-forget)
+            logStatusChange(pickupId, 'completed', action_user_id);
+
+            const msg = payment_method === 'saldo' 
+                ? 'Transaksi dikonfirmasi. Saldo dompet diperbarui.' 
+                : 'Transaksi cash dicatat. Mohon konfirmasi setoran ke Pengepul.';
+            return res.json({ success: true, message: msg });
+
+        } catch (trxErr) {
+            // Jika ada satu query saja yg gagal, rollback semuanya termasuk status pickup
+            await conn.rollback();
+            conn.release();
+            throw trxErr; 
+        }
+
+    } catch (err) {
+        return res.status(500).json({ success: false, message: 'Gagal mencatat transaksi: ' + err.message });
+    }
 };
 
 // ============================================================
